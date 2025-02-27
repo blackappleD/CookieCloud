@@ -45,34 +45,48 @@ app.post(`${api_root}/update`, (req, res) => {
 
 app.all(`${api_root}/get/:uuid`, (req, res) => {
     const { uuid } = req.params;
+    const { domain, password } = req.body; // 从body中获取domain和password
+    
     // none of the fields can be empty
     if (!uuid) {
         res.status(400).send('Bad Request');
         return;
     }
+    
     // get encrypted from uuid file
     const file_path = path.join(data_dir, path.basename(uuid)+'.json');
     if (!fs.existsSync(file_path)) {
         res.status(404).send('Not Found');
         return;
     }
+    
     const data = JSON.parse(fs.readFileSync(file_path));
-    if( !data )
-    {
-        res.status(500).send('Internal Serverless Error');
-        return;
+    if(!data) {
     }
-    else
-    {
-        // 如果传递了password，则返回解密后的数据
-        if( req.body.password )
-        {
-            const parsed = cookie_decrypt( uuid, data.encrypted, req.body.password );
-            res.json(parsed);
-        }else
-        {
-            res.json(data);
+    
+    // 如果传递了password，则返回解密后的数据
+    if(password) {
+        let parsed = cookie_decrypt(uuid, data.encrypted, password);
+        
+        // 如果指定了domain且解密数据包含cookie_data
+        if(domain && parsed.cookie_data) {
+            const filteredCookieData = {};
+            
+            // 遍历所有cookie domains
+            for(const cookieDomain in parsed.cookie_data) {
+                // 如果当前domain包含查询的domain关键字
+                if(cookieDomain.includes(domain)) {
+                    filteredCookieData[cookieDomain] = parsed.cookie_data[cookieDomain];
+                }
+            }
+            
+            // 替换原始cookie_data为过滤后的结果
+            parsed.cookie_data = filteredCookieData;
         }
+        
+        res.json(parsed);
+    } else {
+        res.json(data);
     }
 });
 
